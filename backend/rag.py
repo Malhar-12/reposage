@@ -7,6 +7,11 @@ from typing import AsyncGenerator
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
+# Pre-load embedding model at startup so first request doesn't time out
+from chromadb.utils import embedding_functions
+_ef = embedding_functions.DefaultEmbeddingFunction()
+print("Embedding model loaded successfully")
+
 # File types we want to index
 ALLOWED_EXT = {
     ".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rs",
