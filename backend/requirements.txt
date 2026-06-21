@@ -1,7 +1,6 @@
 fastapi
 uvicorn[standard]
 httpx
-chromadb
+rank-bm25
 anthropic
 python-dotenv
-pydantic
