@@ -78,7 +78,7 @@ class RAGSystem:
 
             # Prioritise root and shallow files, cap at 40
             paths.sort(key=lambda p: (p.count("/"), p))
-            paths = paths[:40]
+            paths = paths[:20]
 
             results = []
             for i in range(0, len(paths), 10):
