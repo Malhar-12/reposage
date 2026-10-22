@@ -13,22 +13,15 @@ logger = logging.getLogger(__name__)
 
 from rag import RAGSystem
 
-app = FastAPI(title="RepoSage API", version="2.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = FastAPI(title="RepoSage API", version="3.0.0")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 rag = RAGSystem()
-indexing_status = {}  # repo_id -> status dict
+indexing_status = {}
 
 
 class IndexRequest(BaseModel):
     github_url: str
-
 
 class ChatRequest(BaseModel):
     repo_id: str
@@ -37,28 +30,19 @@ class ChatRequest(BaseModel):
 
 
 async def _do_index(repo_id: str, github_url: str):
-    """Background task: index a repo and update status."""
     try:
-        logger.info(f"Starting indexing for {repo_id}")
-        indexing_status[repo_id] = {
-            "status": "indexing",
-            "message": "Fetching files from GitHub...",
-        }
+        logger.info(f"Indexing {repo_id}")
+        indexing_status[repo_id] = {"status": "indexing", "message": "Fetching files from GitHub..."}
         result = await rag.index_repository(github_url)
         indexing_status[repo_id] = {
             "status": "ready",
-            "message": f"Indexed {result['file_count']} files and {result['chunk_count']} chunks",
-            "file_count": result["file_count"],
-            "chunk_count": result["chunk_count"],
-            "repo_id": repo_id,
+            "message": f"Indexed {result['file_count']} files · {result['chunk_count']} chunks",
+            **result,
         }
-        logger.info(f"Indexing complete for {repo_id}: {result}")
+        logger.info(f"Done: {repo_id}")
     except Exception as e:
-        logger.error(f"Indexing failed for {repo_id}: {e}")
-        indexing_status[repo_id] = {
-            "status": "error",
-            "message": str(e),
-        }
+        logger.error(f"Failed {repo_id}: {e}")
+        indexing_status[repo_id] = {"status": "error", "message": str(e)}
 
 
 @app.post("/api/index")
@@ -69,18 +53,12 @@ async def index_repo(req: IndexRequest, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail=str(e))
 
     repo_id = f"{owner}/{repo}"
-
-    # If already indexed and ready, return immediately
     if repo_id in rag.collections:
-        return {
-            "repo_id": repo_id,
-            "status": "ready",
-            "message": "Already indexed",
-        }
+        status = indexing_status.get(repo_id, {})
+        return {"repo_id": repo_id, "status": "ready", **status}
 
     indexing_status[repo_id] = {"status": "indexing", "message": "Starting..."}
     background_tasks.add_task(_do_index, repo_id, req.github_url)
-
     return {"repo_id": repo_id, "status": "indexing"}
 
 
@@ -97,11 +75,7 @@ def get_status(repo_id: str):
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
     if req.repo_id not in rag.collections:
-        raise HTTPException(
-            status_code=404,
-            detail="Repository not indexed yet. Please index it first.",
-        )
-
+        raise HTTPException(status_code=404, detail="Repository not indexed yet.")
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
@@ -110,7 +84,7 @@ async def chat(req: ChatRequest):
             async for chunk in rag.chat_stream(req.repo_id, req.question, req.history):
                 yield f"data: {json.dumps(chunk)}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+            yield f"data: {json.dumps({'type':'error','content':str(e)})}\n\n"
         finally:
             yield "data: [DONE]\n\n"
 
@@ -126,27 +100,43 @@ def list_repos():
                 "repo_id": repo_id,
                 "file_count": status.get("file_count", 0),
                 "chunk_count": status.get("chunk_count", 0),
+                "summary": rag.summaries.get(repo_id, ""),
             })
     return {"repos": repos}
 
 
+@app.get("/api/files/{repo_id:path}")
+def get_files(repo_id: str):
+    """Return file tree for the file explorer feature."""
+    files = rag.file_lists.get(repo_id)
+    if not files:
+        raise HTTPException(status_code=404, detail="Repo not indexed.")
+    return {"files": files}
+
+
+@app.get("/api/summary/{repo_id:path}")
+def get_summary(repo_id: str):
+    """Return the auto-generated repo summary."""
+    summary = rag.summaries.get(repo_id)
+    if summary is None:
+        raise HTTPException(status_code=404, detail="Repo not indexed.")
+    return {"summary": summary}
+
+
 @app.get("/health")
 def health():
-    api_key_set = bool(os.getenv("ANTHROPIC_API_KEY"))
-    github_token_set = bool(os.getenv("GITHUB_TOKEN"))
     return {
         "status": "ok",
+        "version": "3.0.0",
         "indexed_repos": len(rag.collections),
-        "api_key_configured": api_key_set,
-        "github_token_configured": github_token_set,
+        "api_key_configured": bool(os.getenv("ANTHROPIC_API_KEY")),
+        "github_token_configured": bool(os.getenv("GITHUB_TOKEN")),
     }
 
 
-# Serve frontend
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="static")
-
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))

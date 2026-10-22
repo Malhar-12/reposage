@@ -11,7 +11,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 ALLOWED_EXT = {
     ".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rs",
     ".cpp", ".c", ".h", ".cs", ".rb", ".md", ".txt", ".yaml",
-    ".yml", ".toml", ".sh", ".sql", ".html", ".css",
+    ".yml", ".toml", ".sh", ".sql", ".html", ".css", ".vue", ".svelte",
 }
 
 SKIP_PATTERNS = [
@@ -22,20 +22,36 @@ SKIP_PATTERNS = [
 ]
 
 SYSTEM_PROMPT = """You are an expert software engineer helping developers understand a GitHub codebase.
-Use the retrieved code snippets below to answer accurately.
-Always reference specific file paths when explaining code.
-Format code with markdown code blocks and the correct language tag.
-If the context is not enough to answer, say so clearly.
+Use the retrieved code snippets to answer accurately and concisely.
+Always reference specific file paths (e.g. `src/auth/jwt.py`) when explaining code.
+Format code examples with markdown code blocks and the correct language tag.
+If context is insufficient, say so and suggest what to search for instead.
 
 RETRIEVED CODE CONTEXT:
 {context}"""
+
+SUMMARY_PROMPT = """Analyze this GitHub repository's source files and provide a structured overview.
+
+FILES CONTENT:
+{context}
+
+Provide:
+1. **What this project does** (1-2 sentences)
+2. **Main technologies** (list the stack)
+3. **Key components** (3-5 main files/modules and what they do)
+4. **Architecture pattern** (MVC, microservices, monolith, etc.)
+5. **Entry point** (where execution starts)
+
+Be concise and technical."""
 
 
 class RAGSystem:
     def __init__(self):
         self.ai = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        self.indexes = {}      # repo_id -> {bm25, docs, paths}
-        self.collections = {}  # kept for compatibility with main.py
+        self.indexes = {}
+        self.collections = {}
+        self.summaries = {}   # repo_id -> summary text
+        self.file_lists = {}  # repo_id -> list of {path, size, ext}
 
     def _parse_url(self, url: str) -> tuple:
         m = re.search(r"github\.com/([^/\s]+)/([^/\s]+?)(?:\.git|/?$)", url.strip())
@@ -43,18 +59,14 @@ class RAGSystem:
             raise ValueError("Invalid GitHub URL. Expected: https://github.com/owner/repo")
         return m.group(1), m.group(2).rstrip("/")
 
-    async def _fetch_files(self, owner: str, repo: str) -> list:
-        headers = {
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "RepoSage/1.0",
-        }
+    async def _fetch_files(self, owner: str, repo: str) -> tuple[list, list]:
+        headers = {"Accept": "application/vnd.github+json", "User-Agent": "RepoSage/2.0"}
         if token := os.getenv("GITHUB_TOKEN"):
             headers["Authorization"] = f"Bearer {token}"
 
-        # Use a longer timeout since we're running as background task
         async with httpx.AsyncClient(timeout=60) as client:
-            # Detect default branch
             branch = "main"
+            r = None
             for b in ("main", "master", "HEAD"):
                 try:
                     r = await client.get(
@@ -66,17 +78,16 @@ class RAGSystem:
                         break
                 except Exception:
                     continue
-            else:
-                raise ValueError(
-                    f"Cannot access repo {owner}/{repo}. "
-                    "Check if it's public or if your GITHUB_TOKEN is valid."
-                )
+
+            if not r or r.status_code != 200:
+                raise ValueError(f"Cannot access repo {owner}/{repo}. Is it public?")
 
             tree = r.json().get("tree", [])
             if not tree:
                 raise ValueError(f"Repository {owner}/{repo} appears to be empty.")
 
-            # Score and filter files
+            # Build full file list for file explorer feature
+            all_files = []
             scored = []
             for item in tree:
                 if item["type"] != "blob":
@@ -85,6 +96,8 @@ class RAGSystem:
                 ext = os.path.splitext(path)[1].lower()
                 size = item.get("size", 0)
 
+                all_files.append({"path": path, "size": size, "ext": ext})
+
                 if ext not in ALLOWED_EXT:
                     continue
                 if size > 40_000 or size == 0:
@@ -92,24 +105,22 @@ class RAGSystem:
                 if any(skip in path for skip in SKIP_PATTERNS):
                     continue
 
-                # Score: prefer shallow, important files
                 depth = path.count("/")
                 is_important = any(
                     name in path.lower()
                     for name in ["main", "app", "index", "core", "api", "server",
-                                 "readme", "config", "router", "model", "auth"]
+                                 "readme", "config", "router", "model", "auth",
+                                 "handler", "controller", "service", "util"]
                 )
                 score = depth * 10 - (5 if is_important else 0)
                 scored.append((score, path))
 
-            # Sort by score, take top 15 files only (fast + reliable)
             scored.sort()
-            paths = [p for _, p in scored[:15]]
+            paths = [p for _, p in scored[:20]]
 
             if not paths:
-                raise ValueError("No indexable source files found in this repository.")
+                raise ValueError("No indexable source files found.")
 
-            # Fetch all files in parallel
             tasks = [
                 client.get(
                     f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{p}",
@@ -124,28 +135,20 @@ class RAGSystem:
                 if isinstance(resp, Exception):
                     continue
                 if resp.status_code == 200 and resp.text.strip():
-                    results.append({
-                        "path": path,
-                        "content": resp.text[:6000],  # cap per file
-                    })
+                    results.append({"path": path, "content": resp.text[:6000]})
 
-            return results
+            return results, all_files
 
     def _chunk(self, path: str, content: str) -> list:
         ext = os.path.splitext(path)[1].lower()
-
         if ext == ".py":
             parts = re.split(r"\n(?=(?:def |class |async def ))", content)
-        elif ext in {".js", ".ts", ".jsx", ".tsx"}:
+        elif ext in {".js", ".ts", ".jsx", ".tsx", ".vue"}:
             parts = re.split(r"\n(?=(?:function |class |export |const \w+ = ))", content)
         elif ext in {".md", ".txt"}:
             parts = re.split(r"\n(?=#{1,3} )", content)
         else:
-            # Fixed-size windows with overlap
-            parts = []
-            step = 600
-            for i in range(0, len(content), step):
-                parts.append(content[i:i + 900])
+            parts = [content[i:i + 900] for i in range(0, len(content), 600)]
 
         chunks = []
         for part in parts:
@@ -164,16 +167,35 @@ class RAGSystem:
     def _tokenize(self, text: str) -> list:
         return re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*", text.lower())
 
+    async def _generate_summary(self, files: list) -> str:
+        # Use top 5 most important files for summary
+        important = sorted(
+            files,
+            key=lambda f: (
+                0 if any(n in f["path"].lower() for n in ["readme", "main", "app", "index"]) else 1,
+                f["path"].count("/")
+            )
+        )[:5]
+        context = "\n\n---\n\n".join(
+            f"# {f['path']}\n{f['content'][:1500]}" for f in important
+        )
+        try:
+            resp = self.ai.messages.create(
+                model="claude-haiku-4-5",
+                max_tokens=600,
+                messages=[{"role": "user", "content": SUMMARY_PROMPT.format(context=context)}]
+            )
+            return resp.content[0].text
+        except Exception:
+            return ""
+
     async def index_repository(self, github_url: str) -> dict:
         owner, repo = self._parse_url(github_url)
         repo_id = f"{owner}/{repo}"
 
-        files = await self._fetch_files(owner, repo)
+        files, all_files = await self._fetch_files(owner, repo)
         if not files:
-            raise ValueError(
-                "Could not fetch any files from this repository. "
-                "Make sure it's a public repo and try again."
-            )
+            raise ValueError("Could not fetch any files. Make sure it's a public repo.")
 
         docs, paths = [], []
         for file in files:
@@ -189,35 +211,38 @@ class RAGSystem:
 
         self.indexes[repo_id] = {"bm25": bm25, "docs": docs, "paths": paths}
         self.collections[repo_id] = repo_id
+        self.file_lists[repo_id] = all_files
+
+        # Generate summary in background (non-blocking)
+        summary = await self._generate_summary(files)
+        self.summaries[repo_id] = summary
 
         return {
             "repo_id": repo_id,
             "file_count": len(files),
             "chunk_count": len(docs),
+            "total_files": len(all_files),
+            "summary": summary,
         }
 
-    async def chat_stream(
-        self, repo_id: str, question: str, history: list
-    ) -> AsyncGenerator:
+    async def chat_stream(self, repo_id: str, question: str, history: list) -> AsyncGenerator:
         index = self.indexes.get(repo_id)
         if not index:
-            yield {"type": "error", "content": "Repository not indexed. Please index it first."}
+            yield {"type": "error", "content": "Repository not indexed."}
             return
 
-        # BM25 retrieval
         tokens = self._tokenize(question)
         scores = index["bm25"].get_scores(tokens)
         top_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:5]
 
         context_parts, sources, seen = [], [], set()
         for i in top_idx:
-            if scores[i] > 0:  # only include relevant chunks
+            if scores[i] > 0:
                 context_parts.append(index["docs"][i])
                 if index["paths"][i] not in seen:
                     sources.append(index["paths"][i])
                     seen.add(index["paths"][i])
 
-        # Fallback: if nothing scored, just use top 3
         if not context_parts:
             for i in top_idx[:3]:
                 context_parts.append(index["docs"][i])
@@ -242,7 +267,7 @@ class RAGSystem:
             yield {"type": "error", "content": "Invalid API key. Please check your ANTHROPIC_API_KEY."}
             return
         except anthropic.RateLimitError:
-            yield {"type": "error", "content": "Rate limit hit. Please wait a moment and try again."}
+            yield {"type": "error", "content": "Rate limit hit. Please wait a moment."}
             return
         except Exception as e:
             yield {"type": "error", "content": f"AI error: {str(e)}"}
