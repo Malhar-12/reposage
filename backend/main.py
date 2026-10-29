@@ -7,21 +7,33 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
+import re
+import hashlib
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi import Request
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from rag import RAGSystem
 
-app = FastAPI(title="RepoSage API", version="3.0.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+limiter = Limiter(key_func=get_remote_address)
+app = FastAPI(title="RespoSage API", version="4.0.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(CORSMiddleware, allow_origins=[os.getenv("ALLOWED_ORIGIN","*")], allow_methods=["*"], allow_headers=["*"])
 
 rag = RAGSystem()
 indexing_status = {}
 
 
+GITHUB_URL_RE = re.compile(r"^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+
 class IndexRequest(BaseModel):
     github_url: str
+    github_token: str = ""  # optional, for private repos; never stored
 
 class ChatRequest(BaseModel):
     repo_id: str
@@ -29,11 +41,11 @@ class ChatRequest(BaseModel):
     history: list = []
 
 
-async def _do_index(repo_id: str, github_url: str):
+async def _do_index(repo_id: str, github_url: str, token: str = ""):
     try:
         logger.info(f"Indexing {repo_id}")
         indexing_status[repo_id] = {"status": "indexing", "message": "Fetching files from GitHub..."}
-        result = await rag.index_repository(github_url)
+        result = await rag.index_repository(github_url, token, repo_id)
         indexing_status[repo_id] = {
             "status": "ready",
             "message": f"Indexed {result['file_count']} files · {result['chunk_count']} chunks",
@@ -46,19 +58,27 @@ async def _do_index(repo_id: str, github_url: str):
 
 
 @app.post("/api/index")
-async def index_repo(req: IndexRequest, background_tasks: BackgroundTasks):
+@limiter.limit("5/minute")
+async def index_repo(request: Request, req: IndexRequest, background_tasks: BackgroundTasks):
+    if len(req.github_url) > 300 or not GITHUB_URL_RE.match(req.github_url.strip()):
+        raise HTTPException(status_code=400, detail="Please enter a valid github.com repository URL.")
+    if len(req.github_token) > 255:
+        raise HTTPException(status_code=400, detail="Invalid token.")
     try:
         owner, repo = rag._parse_url(req.github_url)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     repo_id = f"{owner}/{repo}"
+    if req.github_token:
+        # Private repo: scope the index ID to the token so nobody else can guess/access it
+        repo_id += "~" + hashlib.sha256(req.github_token.encode()).hexdigest()[:12]
     if repo_id in rag.collections:
         status = indexing_status.get(repo_id, {})
         return {"repo_id": repo_id, "status": "ready", **status}
 
     indexing_status[repo_id] = {"status": "indexing", "message": "Starting..."}
-    background_tasks.add_task(_do_index, repo_id, req.github_url)
+    background_tasks.add_task(_do_index, repo_id, req.github_url, req.github_token)
     return {"repo_id": repo_id, "status": "indexing"}
 
 
@@ -73,9 +93,12 @@ def get_status(repo_id: str):
 
 
 @app.post("/api/chat")
-async def chat(req: ChatRequest):
+@limiter.limit("20/minute")
+async def chat(request: Request, req: ChatRequest):
     if req.repo_id not in rag.collections:
         raise HTTPException(status_code=404, detail="Repository not indexed yet.")
+    if len(req.question) > 2000:
+        raise HTTPException(status_code=400, detail="Question too long (max 2000 characters).")
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 

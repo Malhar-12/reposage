@@ -54,15 +54,22 @@ class RAGSystem:
         self.file_lists = {}  # repo_id -> list of {path, size, ext}
 
     def _parse_url(self, url: str) -> tuple:
-        m = re.search(r"github\.com/([^/\s]+)/([^/\s]+?)(?:\.git|/?$)", url.strip())
+        url = url.strip()
+        # Always extract just owner/repo from any GitHub URL
+        m = re.search(r"github\.com/([^/\s]+)/([^/\s#?]+?)(?:\.git|/|$)", url)
         if not m:
-            raise ValueError("Invalid GitHub URL. Expected: https://github.com/owner/repo")
-        return m.group(1), m.group(2).rstrip("/")
+            raise ValueError("Invalid GitHub URL. Please use: https://github.com/owner/repo")
+        owner = m.group(1)
+        repo = m.group(2)
+        return owner, repo
 
-    async def _fetch_files(self, owner: str, repo: str) -> tuple[list, list]:
+    async def _fetch_files(self, owner: str, repo: str, user_token: str = "") -> tuple[list, list]:
         headers = {"Accept": "application/vnd.github+json", "User-Agent": "RepoSage/2.0"}
-        if token := os.getenv("GITHUB_TOKEN"):
+        # User-supplied token (private repos) wins; used only for this request, never stored or logged
+        token = user_token or os.getenv("GITHUB_TOKEN")
+        if token:
             headers["Authorization"] = f"Bearer {token}"
+        raw_headers = {"Authorization": f"Bearer {token}"} if user_token else {}
 
         async with httpx.AsyncClient(timeout=60) as client:
             branch = "main"
@@ -80,7 +87,10 @@ class RAGSystem:
                     continue
 
             if not r or r.status_code != 200:
-                raise ValueError(f"Cannot access repo {owner}/{repo}. Is it public?")
+                raise ValueError(
+                    f"Cannot access {owner}/{repo}. If it's private, add a GitHub token "
+                    "(Settings > Developer settings > Fine-grained tokens, read-only 'Contents')."
+                )
 
             tree = r.json().get("tree", [])
             if not tree:
@@ -124,6 +134,7 @@ class RAGSystem:
             tasks = [
                 client.get(
                     f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{p}",
+                    headers=raw_headers,
                     timeout=15,
                 )
                 for p in paths
@@ -189,11 +200,11 @@ class RAGSystem:
         except Exception:
             return ""
 
-    async def index_repository(self, github_url: str) -> dict:
+    async def index_repository(self, github_url: str, user_token: str = "", repo_id: str = "") -> dict:
         owner, repo = self._parse_url(github_url)
-        repo_id = f"{owner}/{repo}"
+        repo_id = repo_id or f"{owner}/{repo}"
 
-        files, all_files = await self._fetch_files(owner, repo)
+        files, all_files = await self._fetch_files(owner, repo, user_token)
         if not files:
             raise ValueError("Could not fetch any files. Make sure it's a public repo.")
 

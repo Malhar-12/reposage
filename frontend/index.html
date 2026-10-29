@@ -2,512 +2,681 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>RepoSage — Chat with any GitHub Repo</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>RespoSage — Chat with any GitHub Repo</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <style>
-  :root {
-    --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
-    --border: #30363d; --text: #e6edf3; --muted: #7d8590;
-    --accent: #58a6ff; --accent2: #3fb950; --danger: #f85149;
-    --radius: 8px; --font: system-ui, -apple-system, sans-serif;
-  }
-  [data-theme="light"] {
-    --bg: #ffffff; --bg2: #f6f8fa; --bg3: #eaeef2;
-    --border: #d0d7de; --text: #1f2328; --muted: #636c76;
-    --accent: #0969da; --accent2: #1a7f37; --danger: #cf222e;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
-  a { color: var(--accent); }
+:root{--bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;--text:#e6edf3;--muted:#7d8590;--accent:#58a6ff;--green:#3fb950;--purple:#d2a8ff;--danger:#f85149;--amber:#e3b341;--radius:8px;--font:system-ui,-apple-system,sans-serif;}
+[data-theme="light"]{--bg:#fff;--bg2:#f6f8fa;--bg3:#eaeef2;--border:#d0d7de;--text:#1f2328;--muted:#636c76;--accent:#0969da;--green:#1a7f37;--purple:#8250df;--danger:#cf222e;--amber:#9a6700;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+a{color:var(--accent);}
 
-  /* ── Header ── */
-  header {
-    display: flex; align-items: center; gap: 12px;
-    padding: 12px 20px; border-bottom: 1px solid var(--border);
-    background: var(--bg2); flex-shrink: 0;
-  }
-  .logo { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
-  .logo span { color: var(--accent); }
-  .tagline { font-size: 13px; color: var(--muted); }
-  .header-actions { margin-left: auto; display: flex; gap: 8px; }
-  .icon-btn {
-    background: none; border: 1px solid var(--border); color: var(--muted);
-    padding: 6px 10px; border-radius: var(--radius); cursor: pointer; font-size: 13px;
-  }
-  .icon-btn:hover { color: var(--text); border-color: var(--text); }
+header{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0;}
+.logo{font-size:18px;font-weight:700;letter-spacing:-0.5px;white-space:nowrap;}
+.logo span{color:var(--accent);}
+.logo-tag{font-size:10px;background:var(--accent);color:#fff;padding:2px 6px;border-radius:4px;margin-left:4px;vertical-align:middle;font-weight:600;}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+#repo-badge{display:none;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--green);color:var(--green);padding:3px 10px;border-radius:20px;font-size:12px;font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#repo-badge.visible{display:flex;}
+.icon-btn{background:none;border:1px solid var(--border);color:var(--muted);padding:5px 10px;border-radius:var(--radius);cursor:pointer;font-size:12px;white-space:nowrap;}
+.icon-btn:hover{color:var(--text);border-color:var(--text);}
+.icon-btn.active{border-color:var(--accent);color:var(--accent);}
 
-  /* ── Index bar ── */
-  #index-bar {
-    display: flex; gap: 8px; align-items: center;
-    padding: 12px 20px; border-bottom: 1px solid var(--border);
-    background: var(--bg2); flex-shrink: 0;
-  }
-  #url-input {
-    flex: 1; background: var(--bg3); border: 1px solid var(--border);
-    color: var(--text); padding: 8px 12px; border-radius: var(--radius);
-    font-size: 14px; outline: none; font-family: monospace;
-  }
-  #url-input:focus { border-color: var(--accent); }
-  #url-input::placeholder { color: var(--muted); }
-  .btn {
-    padding: 8px 16px; border-radius: var(--radius); border: none;
-    cursor: pointer; font-size: 13px; font-weight: 500; font-family: var(--font);
-  }
-  .btn-primary { background: var(--accent); color: #fff; }
-  .btn-primary:hover { opacity: 0.85; }
-  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
-  .btn-secondary:hover { border-color: var(--text); }
-  #repo-badge {
-    display: none; align-items: center; gap: 6px;
-    background: var(--bg3); border: 1px solid var(--accent2); color: var(--accent2);
-    padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500;
-  }
-  #repo-badge.visible { display: flex; }
+#index-bar{display:flex;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0;}
+#url-input{flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:var(--radius);font-size:13px;outline:none;font-family:monospace;min-width:0;}
+#url-input:focus{border-color:var(--accent);}
+#url-input::placeholder{color:var(--muted);}
+.btn{padding:7px 14px;border-radius:var(--radius);border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:var(--font);white-space:nowrap;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{opacity:.85;}
+.btn-primary:disabled{opacity:.45;cursor:not-allowed;}
+.btn-ghost{background:var(--bg3);border:1px solid var(--border);color:var(--text);}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
 
-  /* ── Main layout ── */
-  main { display: flex; flex: 1; overflow: hidden; }
+#status-bar{display:none;padding:6px 16px;font-size:12px;background:var(--bg3);border-bottom:1px solid var(--border);color:var(--muted);flex-shrink:0;align-items:center;gap:8px;}
+#status-bar.visible{display:flex;}
+#status-bar.error{color:var(--danger);}
+#status-bar.success{color:var(--green);}
+.spinner{width:11px;height:11px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
 
-  /* ── Chat panel ── */
-  #chat-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+main{display:flex;flex:1;overflow:hidden;}
 
-  #messages {
-    flex: 1; overflow-y: auto; padding: 20px;
-    display: flex; flex-direction: column; gap: 16px;
-  }
-  .message { display: flex; gap: 12px; max-width: 820px; }
-  .message.user { flex-direction: row-reverse; margin-left: auto; }
-  .avatar {
-    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 14px; font-weight: 600;
-  }
-  .avatar.ai { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff; }
-  .avatar.user { background: var(--bg3); color: var(--muted); border: 1px solid var(--border); }
-  .bubble {
-    background: var(--bg2); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 12px 16px;
-    font-size: 14px; line-height: 1.65; max-width: 680px;
-  }
-  .message.user .bubble { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .bubble p { margin-bottom: 8px; }
-  .bubble p:last-child { margin-bottom: 0; }
-  .bubble pre { background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 12px; overflow-x: auto; margin: 8px 0; }
-  .bubble code { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12.5px; }
-  .bubble p > code { background: var(--bg3); padding: 2px 5px; border-radius: 4px; }
-  [data-theme="light"] .bubble pre { background: #f6f8fa; }
-  .typing { display: flex; gap: 4px; align-items: center; padding: 8px 0; }
-  .typing span { width: 6px; height: 6px; background: var(--muted); border-radius: 50%; animation: bounce 1.2s infinite; }
-  .typing span:nth-child(2) { animation-delay: 0.2s; }
-  .typing span:nth-child(3) { animation-delay: 0.4s; }
-  @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+/* Sidebar */
+#sidebar{width:265px;border-right:1px solid var(--border);background:var(--bg2);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+.tab-bar{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
+.tab{flex:1;padding:8px 4px;text-align:center;font-size:11px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab:hover:not(.active){color:var(--text);}
+.tab-content{flex:1;overflow-y:auto;padding:8px;display:none;}
+.tab-content.active{display:block;}
 
-  /* ── Input area ── */
-  #input-area {
-    padding: 16px 20px; border-top: 1px solid var(--border);
-    background: var(--bg2); flex-shrink: 0;
-  }
-  #input-row { display: flex; gap: 8px; align-items: flex-end; }
-  #question {
-    flex: 1; background: var(--bg3); border: 1px solid var(--border);
-    color: var(--text); padding: 10px 14px; border-radius: var(--radius);
-    font-size: 14px; font-family: var(--font); outline: none; resize: none;
-    min-height: 44px; max-height: 120px; line-height: 1.5;
-  }
-  #question:focus { border-color: var(--accent); }
-  #question::placeholder { color: var(--muted); }
-  #question:disabled { opacity: 0.5; cursor: not-allowed; }
-  #send-btn { height: 44px; padding: 0 18px; flex-shrink: 0; }
-  .hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+/* History panel */
+.history-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;cursor:pointer;border:1px solid transparent;}
+.history-item:hover{background:var(--bg3);border-color:var(--border);}
+.history-item.current{border-color:var(--accent);background:var(--bg3);}
+.history-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0;}
+.history-name{font-size:12px;color:var(--text);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.history-time{font-size:10px;color:var(--muted);margin-top:1px;}
+.history-del{margin-left:auto;font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;padding:2px 4px;border-radius:3px;flex-shrink:0;}
+.history-del:hover{color:var(--danger);}
 
-  /* ── Sources sidebar ── */
-  #sources-panel {
-    width: 260px; border-left: 1px solid var(--border);
-    background: var(--bg2); display: flex; flex-direction: column;
-    overflow: hidden; flex-shrink: 0;
-  }
-  .sources-header {
-    padding: 14px 16px; border-bottom: 1px solid var(--border);
-    font-size: 13px; font-weight: 600; color: var(--muted);
-    text-transform: uppercase; letter-spacing: 0.5px;
-  }
-  #sources-list { overflow-y: auto; flex: 1; padding: 8px; }
-  .source-item {
-    display: flex; align-items: center; gap: 8px;
-    padding: 8px 10px; border-radius: 6px; font-size: 12px;
-    color: var(--muted); cursor: default; font-family: monospace;
-    word-break: break-all;
-  }
-  .source-item:hover { background: var(--bg3); color: var(--text); }
-  .source-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
-  .empty-sources {
-    padding: 24px 16px; text-align: center; color: var(--muted);
-    font-size: 13px; line-height: 1.6;
-  }
+/* Sources */
+.source-item{display:flex;align-items:flex-start;gap:6px;padding:6px 8px;border-radius:6px;font-size:11px;color:var(--muted);font-family:monospace;word-break:break-all;text-decoration:none;line-height:1.4;}
+.source-item:hover{background:var(--bg3);color:var(--accent);}
+.source-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-top:3px;}
 
-  /* ── Welcome screen ── */
-  #welcome {
-    display: flex; flex-direction: column; align-items: center;
-    justify-content: center; flex: 1; gap: 16px; padding: 40px;
-    text-align: center; color: var(--muted);
-  }
-  .welcome-icon { font-size: 48px; }
-  .welcome-title { font-size: 18px; font-weight: 600; color: var(--text); }
-  .welcome-sub { font-size: 14px; line-height: 1.7; max-width: 400px; }
-  .examples { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; width: 100%; max-width: 440px; }
-  .example-btn {
-    background: var(--bg2); border: 1px solid var(--border);
-    color: var(--text); padding: 10px 14px; border-radius: var(--radius);
-    cursor: pointer; font-size: 13px; text-align: left;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .example-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .example-emoji { font-size: 16px; }
+/* Summary */
+#summary-content{padding:10px;font-size:13px;line-height:1.65;}
+#summary-content h1,#summary-content h2,#summary-content h3{font-size:13px;color:var(--accent);margin:10px 0 4px;}
+#summary-content p{margin-bottom:8px;}
+#summary-content ul{padding-left:16px;margin-bottom:8px;}
+#summary-content li{margin-bottom:2px;}
+#summary-content code{background:var(--bg3);padding:1px 4px;border-radius:3px;font-size:11px;}
 
-  /* ── Status bar ── */
-  #status-bar {
-    display: none; padding: 8px 20px; font-size: 12px;
-    background: var(--bg3); border-bottom: 1px solid var(--border);
-    color: var(--muted); flex-shrink: 0;
-  }
-  #status-bar.visible { display: block; }
-  #status-bar.error { color: var(--danger); }
-  #status-bar.success { color: var(--accent2); }
+/* File explorer */
+.file-search{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:var(--radius);font-size:12px;outline:none;margin-bottom:6px;}
+.file-search:focus{border-color:var(--accent);}
+.file-tree{font-size:12px;font-family:monospace;}
+.file-item{padding:4px 8px;cursor:pointer;color:var(--muted);border-radius:4px;display:flex;align-items:center;gap:6px;overflow:hidden;}
+.file-item:hover{background:var(--bg3);color:var(--text);}
+.ext-badge{font-size:10px;background:var(--bg3);border:1px solid var(--border);padding:1px 4px;border-radius:3px;flex-shrink:0;}
+.ext-py{color:#3572a5;}.ext-js,.ext-ts{color:#f1e05a;}.ext-md{color:#83a3d8;}.ext-go{color:#00add8;}.ext-java{color:#b07219;}.ext-default{color:var(--muted);}
 
-  /* ── Scrollbar ── */
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.empty-hint{padding:16px;text-align:center;color:var(--muted);font-size:12px;line-height:1.6;}
 
-  @media (max-width: 640px) {
-    #sources-panel { display: none; }
-  }
+/* Compare panel */
+#compare-bar{display:none;gap:8px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--bg3);flex-shrink:0;}
+#compare-bar.visible{display:flex;}
+#compare-input{flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:var(--radius);font-size:12px;outline:none;font-family:monospace;}
+#compare-input:focus{border-color:var(--purple);}
+.compare-label{font-size:12px;color:var(--purple);font-weight:600;white-space:nowrap;}
+
+/* Chat */
+#chat-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+#messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px;}
+
+.message{display:flex;gap:10px;max-width:860px;}
+.message.user{flex-direction:row-reverse;margin-left:auto;}
+.avatar{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;}
+.avatar.ai{background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;}
+.avatar.user{background:var(--bg3);color:var(--muted);border:1px solid var(--border);}
+.bubble{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-size:13.5px;line-height:1.65;max-width:700px;position:relative;}
+.message.user .bubble{background:var(--accent);color:#fff;border-color:var(--accent);}
+.bubble p{margin-bottom:8px;}
+.bubble p:last-child{margin-bottom:0;}
+.bubble pre{background:#0d1117;border:1px solid var(--border);border-radius:6px;padding:12px;overflow-x:auto;margin:8px 0;position:relative;}
+.bubble code{font-family:'SFMono-Regular',Consolas,monospace;font-size:12px;}
+.bubble p>code{background:var(--bg3);padding:2px 4px;border-radius:3px;}
+[data-theme="light"] .bubble pre{background:#f6f8fa;}
+.copy-btn{position:absolute;top:6px;right:6px;background:var(--bg3);border:1px solid var(--border);color:var(--muted);padding:2px 7px;border-radius:4px;cursor:pointer;font-size:10px;opacity:0;}
+.bubble:hover .copy-btn{opacity:1;}
+.copy-btn:hover{color:var(--text);}
+.typing{display:flex;gap:4px;align-items:center;padding:6px 0;}
+.typing span{width:5px;height:5px;background:var(--muted);border-radius:50%;animation:bounce 1.2s infinite;}
+.typing span:nth-child(2){animation-delay:.2s;}
+.typing span:nth-child(3){animation-delay:.4s;}
+@keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+
+/* Mode pills */
+.mode-bar{display:flex;gap:6px;padding:6px 16px;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0;}
+.mode-pill{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid var(--border);color:var(--muted);background:none;}
+.mode-pill:hover{border-color:var(--text);color:var(--text);}
+.mode-pill.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.mode-pill.compare-pill.active{background:var(--purple);border-color:var(--purple);}
+.mode-pill.explain-pill.active{background:var(--amber);border-color:var(--amber);color:#000;}
+
+/* Explain mode */
+#explain-bar{display:none;flex-direction:column;gap:6px;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--bg3);flex-shrink:0;}
+#explain-bar.visible{display:flex;}
+#explain-input{background:var(--bg2);border:1px solid var(--amber);color:var(--text);padding:8px 10px;border-radius:var(--radius);font-size:12px;outline:none;font-family:monospace;resize:vertical;min-height:80px;}
+.explain-hint{font-size:11px;color:var(--muted);}
+
+/* Suggested */
+.suggested{display:flex;flex-direction:column;gap:5px;margin-top:8px;}
+.suggest-btn{background:var(--bg3);border:1px solid var(--border);color:var(--muted);padding:7px 10px;border-radius:var(--radius);cursor:pointer;font-size:12px;text-align:left;}
+.suggest-btn:hover{border-color:var(--accent);color:var(--text);}
+
+/* Input */
+#input-area{padding:12px 16px;border-top:1px solid var(--border);background:var(--bg2);flex-shrink:0;}
+#input-row{display:flex;gap:8px;align-items:flex-end;}
+#question{flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:var(--radius);font-size:13px;font-family:var(--font);outline:none;resize:none;min-height:40px;max-height:110px;line-height:1.5;}
+#question:focus{border-color:var(--accent);}
+#question::placeholder{color:var(--muted);}
+#question:disabled{opacity:.5;cursor:not-allowed;}
+#send-btn{height:40px;padding:0 16px;flex-shrink:0;}
+.hint{font-size:11px;color:var(--muted);margin-top:5px;}
+
+/* Welcome */
+#welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:14px;padding:32px;text-align:center;}
+.welcome-icon{font-size:44px;}
+.welcome-title{font-size:17px;font-weight:600;color:var(--text);}
+.welcome-sub{font-size:13px;line-height:1.7;max-width:380px;color:var(--muted);}
+.examples{display:flex;flex-direction:column;gap:7px;width:100%;max-width:460px;}
+.example-btn{background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:var(--radius);cursor:pointer;font-size:12px;text-align:left;display:flex;align-items:center;gap:8px;}
+.example-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+/* Compare result */
+.compare-bubble{background:var(--bg2);border:1px solid var(--purple);border-radius:var(--radius);padding:10px 14px;font-size:13.5px;line-height:1.65;max-width:700px;}
+.compare-bubble h3{color:var(--purple);font-size:13px;margin-bottom:6px;}
+
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+@media(max-width:700px){#sidebar{display:none;}}
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">Repo<span>Sage</span></div>
-  <div class="tagline">Chat with any public GitHub repository</div>
-  <div class="header-actions">
-    <div id="repo-badge" class="repo-badge">
-      <span>●</span>
-      <span id="repo-name"></span>
-    </div>
-    <button class="icon-btn" onclick="toggleTheme()" title="Toggle theme">☀/🌙</button>
-    <button class="icon-btn" onclick="clearChat()" title="New chat">New chat</button>
+  <div class="logo">Respo<span>Sage</span><span class="logo-tag">v2</span></div>
+  <div class="header-right">
+    <div id="repo-badge">● <span id="repo-name"></span></div>
+    <button class="icon-btn" onclick="toggleTheme()">☀/🌙</button>
+    <button class="icon-btn" onclick="clearChat()">＋ New</button>
   </div>
 </header>
 
-<div id="status-bar"></div>
+<div id="status-bar">
+  <div class="spinner" id="spinner"></div>
+  <span id="status-text"></span>
+</div>
 
 <div id="index-bar">
-  <input
-    id="url-input"
-    type="text"
-    placeholder="https://github.com/owner/repo"
-    onkeydown="if(event.key==='Enter') indexRepo()"
-  />
+  <input id="url-input" type="text" placeholder="https://github.com/owner/repo" onkeydown="if(event.key==='Enter')indexRepo()"/>
+  <input id="token-input" type="password" autocomplete="off" placeholder="GitHub token (private repos only)" style="width:230px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:var(--radius);font-size:12px;outline:none;"/>
   <button class="btn btn-primary" id="index-btn" onclick="indexRepo()">Index Repo</button>
+</div>
+<div style="padding:4px 16px;font-size:11px;color:var(--muted);background:var(--bg2);border-bottom:1px solid var(--border);">🔒 Token is used only for this session, sent over HTTPS, and never stored. Use a read-only fine-grained token.</div>
+
+<!-- Mode pills -->
+<div class="mode-bar">
+  <button class="mode-pill active" id="mode-chat" onclick="setMode('chat')">💬 Chat</button>
+  <button class="mode-pill compare-pill" id="mode-compare" onclick="setMode('compare')">⚡ Compare Repos</button>
+  <button class="mode-pill explain-pill" id="mode-explain" onclick="setMode('explain')">🔍 Explain Code</button>
+</div>
+
+<!-- Compare bar -->
+<div id="compare-bar">
+  <span class="compare-label">Compare with →</span>
+  <input id="compare-input" type="text" placeholder="https://github.com/second/repo"/>
+  <button class="btn btn-ghost" onclick="runCompare()" style="border-color:var(--purple);color:var(--purple);">Compare</button>
+  <button class="icon-btn" onclick="setMode('chat')">✕</button>
+</div>
+
+<!-- Explain bar -->
+<div id="explain-bar">
+  <textarea id="explain-input" placeholder="Paste any code snippet here and click Explain…"></textarea>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <button class="btn" style="background:var(--amber);color:#000;" onclick="runExplain()">Explain this code</button>
+    <span class="explain-hint">Works without indexing a repo</span>
+  </div>
 </div>
 
 <main>
+  <div id="sidebar">
+    <div class="tab-bar">
+      <div class="tab active" id="s-history-tab" onclick="sidebarTab('history')">⏱ History</div>
+      <div class="tab" id="s-sources-tab" onclick="sidebarTab('sources')">Sources</div>
+      <div class="tab" id="s-summary-tab" onclick="sidebarTab('summary')">Overview</div>
+      <div class="tab" id="s-files-tab" onclick="sidebarTab('files')">Files</div>
+    </div>
+    <div class="tab-content active" id="s-history-panel">
+      <div class="empty-hint" id="history-empty">Repos you index appear here.<br/>Click any to reload.</div>
+    </div>
+    <div class="tab-content" id="s-sources-panel">
+      <div class="empty-hint">Sources from retrieved chunks appear after each answer.</div>
+    </div>
+    <div class="tab-content" id="s-summary-panel">
+      <div class="empty-hint">Index a repo to see an AI-generated overview.</div>
+    </div>
+    <div class="tab-content" id="s-files-panel">
+      <div class="empty-hint">Index a repo to browse its files.</div>
+    </div>
+  </div>
+
   <div id="chat-panel">
     <div id="messages">
       <div id="welcome">
         <div class="welcome-icon">🧠</div>
-        <div class="welcome-title">Ask anything about a codebase</div>
-        <div class="welcome-sub">
-          Paste a public GitHub URL above, click <strong>Index Repo</strong>,
-          then ask questions in plain English.
-        </div>
+        <div class="welcome-title">Chat with any GitHub repository</div>
+        <div class="welcome-sub">Paste a public GitHub URL above and click <strong>Index Repo</strong>. Then ask anything — or try Compare or Explain mode.</div>
         <div class="examples">
-          <button class="example-btn" onclick="setExample('https://github.com/fastapi/fastapi', 'How does the dependency injection system work?')">
-            <span class="example-emoji">⚡</span> FastAPI — How does dependency injection work?
-          </button>
-          <button class="example-btn" onclick="setExample('https://github.com/expressjs/express', 'How does the router handle middleware?')">
-            <span class="example-emoji">🚀</span> Express — How does router middleware work?
-          </button>
-          <button class="example-btn" onclick="setExample('https://github.com/pallets/flask', 'How does the request context work?')">
-            <span class="example-emoji">🌶️</span> Flask — How does the request context work?
-          </button>
+          <button class="example-btn" onclick="setExample('https://github.com/pallets/flask','How does the request context work?')">🌶️ Flask — How does the request context work?</button>
+          <button class="example-btn" onclick="setExample('https://github.com/fastapi/fastapi','How does dependency injection work?')">⚡ FastAPI — How does dependency injection work?</button>
+          <button class="example-btn" onclick="setExample('https://github.com/expressjs/express','How does router middleware work?')">🚀 Express — How does router middleware work?</button>
         </div>
       </div>
     </div>
-
     <div id="input-area">
       <div id="input-row">
-        <textarea
-          id="question"
-          placeholder="Index a repo first, then ask anything about its code…"
-          rows="1"
-          disabled
-          onkeydown="handleKey(event)"
-          oninput="autoResize(this)"
-        ></textarea>
+        <textarea id="question" placeholder="Index a repo first, then ask anything…" rows="1" disabled onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
         <button class="btn btn-primary" id="send-btn" onclick="sendMessage()" disabled>Send</button>
       </div>
       <div class="hint">Enter to send · Shift+Enter for new line</div>
-    </div>
-  </div>
-
-  <div id="sources-panel">
-    <div class="sources-header">Sources</div>
-    <div id="sources-list">
-      <div class="empty-sources">Sources from the retrieved chunks will appear here after each answer.</div>
     </div>
   </div>
 </main>
 
 <script>
 const API = window.location.origin;
-let currentRepo = null;
-let history = [];
-let isStreaming = false;
+let currentRepo=null, history=[], isStreaming=false, pollTimer=null;
+let allFiles=[], currentMode='chat';
+const STORAGE_KEY='resposagehist_v2';
 
-// ── Theme ────────────────────────────────────────────────────────────────────
-const savedTheme = localStorage.getItem('theme') || 'dark';
-document.documentElement.setAttribute('data-theme', savedTheme);
-function toggleTheme() {
-  const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', t);
-  localStorage.setItem('theme', t);
+// ── Theme ─────────────────────────────────────────────────────────
+document.documentElement.setAttribute('data-theme',localStorage.getItem('rstheme')||'dark');
+function toggleTheme(){
+  const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+  document.documentElement.setAttribute('data-theme',t);
+  localStorage.setItem('rstheme',t);
 }
 
-// ── Status bar ───────────────────────────────────────────────────────────────
-function setStatus(msg, type = '') {
-  const bar = document.getElementById('status-bar');
-  bar.textContent = msg;
-  bar.className = 'visible' + (type ? ' ' + type : '');
+// ── Status ────────────────────────────────────────────────────────
+function setStatus(msg,type='loading'){
+  const bar=document.getElementById('status-bar');
+  document.getElementById('status-text').textContent=msg;
+  document.getElementById('spinner').style.display=type==='loading'?'block':'none';
+  bar.className='visible'+(type!=='loading'?' '+type:'');
 }
-function clearStatus() {
-  document.getElementById('status-bar').className = '';
+function clearStatus(){document.getElementById('status-bar').className='';}
+
+// ── Mode switching ────────────────────────────────────────────────
+function setMode(m){
+  currentMode=m;
+  ['chat','compare','explain'].forEach(x=>{
+    document.getElementById('mode-'+x).classList.toggle('active',x===m);
+  });
+  document.getElementById('compare-bar').classList.toggle('visible',m==='compare');
+  document.getElementById('explain-bar').classList.toggle('visible',m==='explain');
 }
 
-// ── Index repository ─────────────────────────────────────────────────────────
-async function indexRepo() {
-  const url = document.getElementById('url-input').value.trim();
-  if (!url) return;
+// ── Sidebar tabs ──────────────────────────────────────────────────
+function sidebarTab(name){
+  ['history','sources','summary','files'].forEach(t=>{
+    document.getElementById('s-'+t+'-tab').classList.toggle('active',t===name);
+    document.getElementById('s-'+t+'-panel').classList.toggle('active',t===name);
+  });
+}
 
-  const btn = document.getElementById('index-btn');
-  btn.disabled = true;
-  btn.textContent = 'Indexing…';
-  setStatus('Fetching files from GitHub and building vector index…');
-
-  try {
-    const res = await fetch(`${API}/api/index`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ github_url: url }),
-      signal: AbortSignal.timeout(120000),
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Indexing failed');
-
-    currentRepo = data.repo_id;
-    history = [];
-
-    document.getElementById('repo-name').textContent = data.repo_id;
+// ── History (localStorage) ────────────────────────────────────────
+function loadHistory(){
+  try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');}catch{return[];}
+}
+function saveToHistory(repoId,data){
+  if(repoId.includes('~'))return;
+  let hist=loadHistory();
+  hist=hist.filter(h=>h.id!==repoId);
+  hist.unshift({id:repoId,time:Date.now(),files:data.file_count||0,chunks:data.chunk_count||0});
+  hist=hist.slice(0,10);
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(hist));
+  renderHistory();
+}
+function deleteFromHistory(repoId){
+  let hist=loadHistory().filter(h=>h.id!==repoId);
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(hist));
+  renderHistory();
+}
+function renderHistory(){
+  const panel=document.getElementById('s-history-panel');
+  const hist=loadHistory();
+  if(!hist.length){panel.innerHTML='<div class="empty-hint">Repos you index appear here.</div>';return;}
+  panel.innerHTML=hist.map(h=>`
+    <div class="history-item${h.id===currentRepo?' current':''}" onclick="reloadRepo('${h.id}')">
+      <span class="history-dot"></span>
+      <div style="overflow:hidden;flex:1;">
+        <div class="history-name">${h.id}</div>
+        <div class="history-time">${timeAgo(h.time)} · ${h.files||0} files</div>
+      </div>
+      <button class="history-del" onclick="event.stopPropagation();deleteFromHistory('${h.id}')" title="Remove">✕</button>
+    </div>`).join('');
+}
+function timeAgo(ts){
+  const diff=Date.now()-ts;
+  if(diff<60000)return 'just now';
+  if(diff<3600000)return Math.floor(diff/60000)+'m ago';
+  if(diff<86400000)return Math.floor(diff/3600000)+'h ago';
+  return Math.floor(diff/86400000)+'d ago';
+}
+async function reloadRepo(repoId){
+  const status=await fetch(`${API}/api/status/${encodeURIComponent(repoId)}`).then(r=>r.json()).catch(()=>({}));
+  if(status.status==='ready'){
+    currentRepo=repoId;
+    history=[];
+    document.getElementById('repo-name').textContent=repoId;
     document.getElementById('repo-badge').classList.add('visible');
-
-    document.getElementById('question').disabled = false;
-    document.getElementById('send-btn').disabled = false;
-    document.getElementById('question').focus();
-
-    setStatus(
-      `✓ Indexed ${data.file_count} files → ${data.chunk_count} chunks. Ready to chat!`,
-      'success'
-    );
-
-    // Clear welcome, add greeting
+    document.getElementById('question').disabled=false;
+    document.getElementById('send-btn').disabled=false;
     hideWelcome();
-    addMessage('ai', `**${data.repo_id}** is indexed (${data.file_count} files, ${data.chunk_count} chunks). Ask me anything about this codebase!`);
-
-    setTimeout(clearStatus, 4000);
-  } catch (err) {
-    setStatus('Error: ' + err.message, 'error');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Index Repo';
+    renderHistory();
+    const {contentEl}=addMessage('ai','');
+    contentEl.innerHTML=`<p><strong>${repoId}</strong> reloaded. Ask anything!</p>`;
+    loadSidePanels(repoId);
+  } else {
+    document.getElementById('url-input').value='https://github.com/'+repoId;
+    indexRepo();
   }
 }
 
-// ── Chat ─────────────────────────────────────────────────────────────────────
-async function sendMessage() {
-  if (isStreaming || !currentRepo) return;
+// ── Index ─────────────────────────────────────────────────────────
+function cleanGithubUrl(url){
+  // Extract repo root from any GitHub URL (blob, tree, file, commit etc.)
+  const m=url.trim().match(/github\.com\/([^/\s]+)\/([^/\s#?]+)/);
+  if(m) return `https://github.com/${m[1]}/${m[2].replace(/\.git$/,'')}`;
+  return url.trim();
+}
 
-  const input = document.getElementById('question');
-  const question = input.value.trim();
-  if (!question) return;
+async function indexRepo(){
+  const raw=document.getElementById('url-input').value.trim();
+  if(!raw)return;
+  const url=cleanGithubUrl(raw);
+  // Show user if we cleaned the URL
+  if(url!==raw){
+    document.getElementById('url-input').value=url;
+    setStatus(`Auto-corrected URL to repo root: ${url}`);
+    await new Promise(r=>setTimeout(r,1000));
+  }
+  if(pollTimer)clearInterval(pollTimer);
+  const btn=document.getElementById('index-btn');
+  btn.disabled=true; btn.textContent='Starting...';
+  setStatus('Connecting to GitHub...');
+  try{
+    const res=await fetch(`${API}/api/index`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({github_url:url,github_token:document.getElementById('token-input').value.trim()})});
+    let data;
+    try{data=await res.json();}catch{throw new Error('Server returned an unexpected response. Check the URL and try again.');}
+    if(!res.ok)throw new Error(data.detail||'Failed');
+    btn.textContent='Indexing...';
+    pollStatus(data.repo_id);
+  }catch(err){
+    setStatus('Error: '+err.message,'error');
+    btn.disabled=false; btn.textContent='Index Repo';
+  }
+}
 
-  input.value = '';
-  input.style.height = 'auto';
+const progressMsgs=['Fetching source files...','Reading codebase...','Building search index...','Generating AI overview...','Almost ready...'];
+let msgIdx=0;
+function pollStatus(repoId){
+  msgIdx=0;
+  pollTimer=setInterval(async()=>{
+    setStatus(progressMsgs[msgIdx%progressMsgs.length]); msgIdx++;
+    try{
+      const data=await fetch(`${API}/api/status/${encodeURIComponent(repoId)}`).then(r=>r.json());
+      if(data.status==='ready'){clearInterval(pollTimer);onIndexingDone(repoId,data);}
+      else if(data.status==='error'){
+        clearInterval(pollTimer);
+        setStatus('Error: '+data.message,'error');
+        document.getElementById('index-btn').disabled=false;
+        document.getElementById('index-btn').textContent='Index Repo';
+      }
+    }catch{clearInterval(pollTimer);setStatus('Network error.','error');document.getElementById('index-btn').disabled=false;document.getElementById('index-btn').textContent='Index Repo';}
+  },2000);
+}
+
+async function onIndexingDone(repoId,data){
+  currentRepo=repoId; history=[];
+  document.getElementById('repo-name').textContent=repoId.split('~')[0]+(repoId.includes('~')?' 🔒':'');
+  document.getElementById('repo-badge').classList.add('visible');
+  document.getElementById('question').disabled=false;
+  document.getElementById('send-btn').disabled=false;
+  document.getElementById('index-btn').disabled=false;
+  document.getElementById('token-input').value='';
+  document.getElementById('index-btn').textContent='Index Repo';
+  setStatus(`✓ Indexed ${data.file_count||0} files · ${data.chunk_count||0} chunks`,'success');
+  hideWelcome();
+  saveToHistory(repoId,data);
+  loadSidePanels(repoId,data.summary);
+
+  const {contentEl}=addMessage('ai','');
+  contentEl.innerHTML=`
+    <p><strong>${repoId}</strong> is indexed and ready.</p>
+    <div class="suggested">
+      <button class="suggest-btn" onclick="askSuggested(this)">What does this project do and what's the main entry point?</button>
+      <button class="suggest-btn" onclick="askSuggested(this)">How is authentication or authorization handled?</button>
+      <button class="suggest-btn" onclick="askSuggested(this)">What are the key data models or classes?</button>
+      <button class="suggest-btn" onclick="askSuggested(this)">How does error handling work in this codebase?</button>
+    </div>`;
+  document.getElementById('question').focus();
+  setTimeout(clearStatus,4000);
+}
+
+async function loadSidePanels(repoId,summary){
+  if(summary){
+    document.getElementById('s-summary-panel').innerHTML=`<div id="summary-content">${marked.parse(summary)}</div>`;
+  } else {
+    try{
+      const r=await fetch(`${API}/api/summary/${encodeURIComponent(repoId)}`);
+      if(r.ok){const d=await r.json();document.getElementById('s-summary-panel').innerHTML=`<div id="summary-content">${marked.parse(d.summary||'No summary available.')}</div>`;}
+    }catch{}
+  }
+  try{
+    const r=await fetch(`${API}/api/files/${encodeURIComponent(repoId)}`);
+    if(r.ok){const d=await r.json();allFiles=d.files||[];renderFileTree(allFiles);}
+  }catch{}
+}
+
+// ── File tree ─────────────────────────────────────────────────────
+function getExtColor(ext){return({'.py':'ext-py','.js':'ext-js','.ts':'ext-ts','.jsx':'ext-js','.tsx':'ext-ts','.md':'ext-md','.go':'ext-go','.java':'ext-java'})[ext]||'ext-default';}
+function renderFileTree(files,filter=''){
+  const panel=document.getElementById('s-files-panel');
+  const filtered=filter?files.filter(f=>f.path.toLowerCase().includes(filter.toLowerCase())):files;
+  const code=filtered.filter(f=>['.py','.js','.ts','.jsx','.tsx','.go','.java','.rs','.md','.yaml','.yml','.toml','.sh','.html','.css'].includes(f.ext));
+  let html=`<input class="file-search" placeholder="Search files…" oninput="renderFileTree(allFiles,this.value)" value="${filter}"/>`;
+  html+=`<div class="file-tree">`;
+  for(const f of code.slice(0,80)){
+    html+=`<div class="file-item" onclick="askAboutFile('${f.path}')" title="${f.path}"><span class="ext-badge ${getExtColor(f.ext)}">${f.ext||'?'}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.path}</span></div>`;
+  }
+  if(!code.length)html+=`<div class="empty-hint">No files found.</div>`;
+  html+=`</div>`;
+  panel.innerHTML=html;
+}
+function askAboutFile(path){
+  document.getElementById('question').value=`Explain what ${path} does and its main functions/classes.`;
+  sidebarTab('sources'); sendMessage();
+}
+
+// ── Compare mode ──────────────────────────────────────────────────
+async function runCompare(){
+  if(!currentRepo){setStatus('Index a repo first before comparing.','error');setTimeout(clearStatus,3000);return;}
+  const url2=document.getElementById('compare-input').value.trim();
+  if(!url2){alert('Enter a second GitHub URL to compare.');return;}
 
   hideWelcome();
-  addMessage('user', question);
+  const {contentEl}=addMessage('ai','');
+  contentEl.innerHTML='<div class="typing"><span></span><span></span><span></span></div>';
 
-  const { el: aiEl, contentEl } = addMessage('ai', '');
-  contentEl.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+  // Index second repo silently if not already indexed
+  try{
+    const r1=await fetch(`${API}/api/index`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({github_url:url2})});
+    const d1=await r1.json();
+    const repo2=d1.repo_id;
 
-  isStreaming = true;
-  document.getElementById('send-btn').disabled = true;
-  input.disabled = true;
-
-  let fullText = '';
-
-  try {
-    const res = await fetch(`${API}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo_id: currentRepo, question, history }),
+    // Poll until ready
+    await new Promise((res,rej)=>{
+      let tries=0;
+      const t=setInterval(async()=>{
+        tries++;
+        if(tries>30){clearInterval(t);rej(new Error('Timeout indexing second repo'));return;}
+        const s=await fetch(`${API}/api/status/${encodeURIComponent(repo2)}`).then(r=>r.json()).catch(()=>({}));
+        if(s.status==='ready'){clearInterval(t);res();}
+        if(s.status==='error'){clearInterval(t);rej(new Error(s.message));}
+      },2000);
     });
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || 'Chat failed');
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const raw = line.slice(6).trim();
-        if (raw === '[DONE]') continue;
-
-        const chunk = JSON.parse(raw);
-
-        if (chunk.type === 'text') {
-          fullText += chunk.content;
-          contentEl.innerHTML = marked.parse(fullText);
-          contentEl.querySelectorAll('pre code').forEach(hljs.highlightElement);
-          scrollBottom();
-        } else if (chunk.type === 'sources') {
-          updateSources(chunk.content);
-        } else if (chunk.type === 'error') {
-          contentEl.innerHTML = `<span style="color:var(--danger)">${chunk.content}</span>`;
-        }
+    // Ask comparison question via chat
+    const q=`Compare this repository (${currentRepo}) with ${repo2}. Cover: 1) Purpose and use case, 2) Tech stack differences, 3) Architecture approach, 4) When to use one vs the other.`;
+    const res=await fetch(`${API}/api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({repo_id:currentRepo,question:q,history:[]})});
+    const reader=res.body.getReader(),decoder=new TextDecoder();
+    let buf='',fullText='';
+    while(true){
+      const{done,value}=await reader.read();
+      if(done)break;
+      buf+=decoder.decode(value,{stream:true});
+      const lines=buf.split('\n');buf=lines.pop();
+      for(const line of lines){
+        if(!line.startsWith('data: '))continue;
+        const raw=line.slice(6).trim();
+        if(raw==='[DONE]')continue;
+        const chunk=JSON.parse(raw);
+        if(chunk.type==='text'){fullText+=chunk.content;contentEl.innerHTML=marked.parse(fullText);scrollBottom();}
       }
     }
-
-    // Push to conversation history
-    history.push({ role: 'user', content: question });
-    history.push({ role: 'assistant', content: fullText });
-
-  } catch (err) {
-    contentEl.innerHTML = `<span style="color:var(--danger)">Error: ${err.message}</span>`;
-  } finally {
-    isStreaming = false;
-    input.disabled = false;
-    document.getElementById('send-btn').disabled = false;
-    input.focus();
+    addCopyButtons(contentEl);
+    contentEl.querySelectorAll('pre code').forEach(hljs.highlightElement);
+  }catch(err){
+    contentEl.innerHTML=`<span style="color:var(--danger)">Compare failed: ${err.message}</span>`;
   }
 }
 
-// ── DOM helpers ───────────────────────────────────────────────────────────────
-function hideWelcome() {
-  const w = document.getElementById('welcome');
-  if (w) w.remove();
-}
+// ── Explain mode ──────────────────────────────────────────────────
+async function runExplain(){
+  const code=document.getElementById('explain-input').value.trim();
+  if(!code){alert('Paste some code first.');return;}
+  hideWelcome();
+  addMessage('user','[Code snippet pasted for explanation]');
+  const {contentEl}=addMessage('ai','');
+  contentEl.innerHTML='<div class="typing"><span></span><span></span><span></span></div>';
 
-function addMessage(role, text) {
-  const container = document.getElementById('messages');
-  const wrapper = document.createElement('div');
-  wrapper.className = `message ${role}`;
+  // Use chat endpoint if a repo is indexed, else call a simple explanation
+  const question=`Explain this code in detail — what it does, how it works, any patterns used, and potential issues:\n\`\`\`\n${code}\n\`\`\``;
 
-  const avatar = document.createElement('div');
-  avatar.className = `avatar ${role}`;
-  avatar.textContent = role === 'ai' ? '🧠' : '👤';
-
-  const bubble = document.createElement('div');
-  bubble.className = 'bubble';
-
-  if (text) {
-    bubble.innerHTML = marked.parse(text);
-    bubble.querySelectorAll('pre code').forEach(hljs.highlightElement);
-  }
-
-  wrapper.appendChild(avatar);
-  wrapper.appendChild(bubble);
-  container.appendChild(wrapper);
-  scrollBottom();
-
-  return { el: wrapper, contentEl: bubble };
-}
-
-function updateSources(paths) {
-  const list = document.getElementById('sources-list');
-  list.innerHTML = '';
-  if (!paths || paths.length === 0) {
-    list.innerHTML = '<div class="empty-sources">No sources retrieved.</div>';
-    return;
-  }
-  for (const path of paths) {
-    const item = document.createElement('div');
-    item.className = 'source-item';
-    item.innerHTML = `<span class="source-dot"></span><span title="${path}">${path}</span>`;
-    list.appendChild(item);
+  if(currentRepo){
+    await streamChat(currentRepo, question, contentEl);
+  } else {
+    // No repo indexed — call API with a generic context
+    try{
+      const res=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,messages:[{role:'user',content:question}]})
+      });
+      const data=await res.json();
+      const text=data.content?.map(c=>c.text||'').join('')||'Could not explain — check your connection.';
+      contentEl.innerHTML=marked.parse(text);
+      addCopyButtons(contentEl);
+      contentEl.querySelectorAll('pre code').forEach(hljs.highlightElement);
+    }catch(e){
+      contentEl.innerHTML=`<span style="color:var(--danger)">Index a repo first to use Explain mode, or check your connection.</span>`;
+    }
   }
 }
 
-function scrollBottom() {
-  const m = document.getElementById('messages');
-  m.scrollTop = m.scrollHeight;
+// ── Send message ──────────────────────────────────────────────────
+async function sendMessage(){
+  if(isStreaming||!currentRepo)return;
+  const input=document.getElementById('question');
+  const question=input.value.trim();
+  if(!question)return;
+  input.value=''; input.style.height='auto';
+  hideWelcome();
+  addMessage('user',question);
+  const {contentEl}=addMessage('ai','');
+  contentEl.innerHTML='<div class="typing"><span></span><span></span><span></span></div>';
+  isStreaming=true;
+  document.getElementById('send-btn').disabled=true;
+  input.disabled=true;
+  await streamChat(currentRepo,question,contentEl,true);
+  isStreaming=false; input.disabled=false;
+  document.getElementById('send-btn').disabled=false; input.focus();
 }
 
-function clearChat() {
-  history = [];
-  currentRepo = null;
-  document.getElementById('messages').innerHTML = '';
-  document.getElementById('sources-list').innerHTML =
-    '<div class="empty-sources">Sources from the retrieved chunks will appear here after each answer.</div>';
+async function streamChat(repoId,question,contentEl,updateHistory=false){
+  let fullText='';
+  try{
+    const res=await fetch(`${API}/api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({repo_id:repoId,question,history})});
+    if(!res.ok){const e=await res.json();throw new Error(e.detail||'Chat failed');}
+    const reader=res.body.getReader(),decoder=new TextDecoder();
+    let buffer='';
+    while(true){
+      const{done,value}=await reader.read();
+      if(done)break;
+      buffer+=decoder.decode(value,{stream:true});
+      const lines=buffer.split('\n');buffer=lines.pop();
+      for(const line of lines){
+        if(!line.startsWith('data: '))continue;
+        const raw=line.slice(6).trim();
+        if(raw==='[DONE]')continue;
+        const chunk=JSON.parse(raw);
+        if(chunk.type==='text'){fullText+=chunk.content;contentEl.innerHTML=marked.parse(fullText);addCopyButtons(contentEl);contentEl.querySelectorAll('pre code').forEach(hljs.highlightElement);scrollBottom();}
+        else if(chunk.type==='sources'){updateSources(chunk.content);sidebarTab('sources');}
+        else if(chunk.type==='error'){contentEl.innerHTML=`<span style="color:var(--danger)">${chunk.content}</span>`;}
+      }
+    }
+    const copyAll=document.createElement('button');
+    copyAll.className='copy-btn'; copyAll.textContent='Copy'; copyAll.style.opacity='1';
+    copyAll.onclick=()=>{navigator.clipboard.writeText(fullText);copyAll.textContent='Copied!';setTimeout(()=>copyAll.textContent='Copy',1500);};
+    contentEl.parentElement.appendChild(copyAll);
+    if(updateHistory){
+      history.push({role:'user',content:question});
+      history.push({role:'assistant',content:fullText});
+    }
+  }catch(err){
+    contentEl.innerHTML=`<span style="color:var(--danger)">Error: ${err.message}</span>`;
+  }
+}
+
+function addCopyButtons(el){
+  el.querySelectorAll('pre').forEach(pre=>{
+    if(pre.querySelector('.copy-btn'))return;
+    const btn=document.createElement('button');
+    btn.className='copy-btn'; btn.textContent='Copy'; btn.style.opacity='1';
+    btn.onclick=()=>{navigator.clipboard.writeText(pre.querySelector('code')?.textContent||pre.textContent);btn.textContent='Copied!';setTimeout(()=>btn.textContent='Copy',1500);};
+    pre.appendChild(btn);
+  });
+}
+
+function updateSources(paths){
+  const list=document.getElementById('s-sources-panel');
+  list.innerHTML='';
+  if(!paths?.length){list.innerHTML='<div class="empty-hint">No sources.</div>';return;}
+  for(const path of paths){
+    const a=document.createElement('a');
+    a.className='source-item';
+    a.href=`https://github.com/${currentRepo.split('~')[0]}/blob/main/${path}`;
+    a.target='_blank'; a.title=path;
+    a.innerHTML=`<span class="source-dot"></span><span>${path}</span>`;
+    list.appendChild(a);
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────
+function hideWelcome(){const w=document.getElementById('welcome');if(w)w.remove();}
+function addMessage(role,text){
+  const container=document.getElementById('messages');
+  const wrapper=document.createElement('div'); wrapper.className=`message ${role}`;
+  const avatar=document.createElement('div'); avatar.className=`avatar ${role}`; avatar.textContent=role==='ai'?'🧠':'👤';
+  const bubble=document.createElement('div'); bubble.className='bubble';
+  if(text){bubble.innerHTML=marked.parse(text);bubble.querySelectorAll('pre code').forEach(hljs.highlightElement);}
+  wrapper.appendChild(avatar); wrapper.appendChild(bubble);
+  container.appendChild(wrapper); scrollBottom();
+  return{el:wrapper,contentEl:bubble};
+}
+function askSuggested(btn){document.getElementById('question').value=btn.textContent.trim();sendMessage();}
+function clearChat(){
+  if(pollTimer)clearInterval(pollTimer);
+  history=[];currentRepo=null;allFiles=[];
+  document.getElementById('messages').innerHTML='';
+  document.getElementById('s-sources-panel').innerHTML='<div class="empty-hint">Sources appear here after each answer.</div>';
+  document.getElementById('s-summary-panel').innerHTML='<div class="empty-hint">Index a repo to see an AI-generated overview.</div>';
+  document.getElementById('s-files-panel').innerHTML='<div class="empty-hint">Index a repo to browse its files.</div>';
   document.getElementById('repo-badge').classList.remove('visible');
-  document.getElementById('question').disabled = true;
-  document.getElementById('send-btn').disabled = true;
-  clearStatus();
-
-  // Re-add welcome
-  const welcome = document.createElement('div');
-  welcome.id = 'welcome';
-  welcome.innerHTML = document.querySelector('#welcome') ? '' : `
-    <div class="welcome-icon">🧠</div>
-    <div class="welcome-title">Ask anything about a codebase</div>
-    <div class="welcome-sub">Paste a public GitHub URL above, click <strong>Index Repo</strong>, then ask questions in plain English.</div>`;
-  document.getElementById('messages').appendChild(welcome);
+  document.getElementById('question').disabled=true;
+  document.getElementById('send-btn').disabled=true;
+  clearStatus(); setMode('chat');
+  const w=document.createElement('div'); w.id='welcome';
+  w.innerHTML=`<div class="welcome-icon">🧠</div><div class="welcome-title">Chat with any GitHub repository</div><div class="welcome-sub">Paste a public GitHub URL above and click <strong>Index Repo</strong>.</div>`;
+  document.getElementById('messages').appendChild(w);
 }
+function setExample(url,q){document.getElementById('url-input').value=url;document.getElementById('question').value=q;}
+function scrollBottom(){const m=document.getElementById('messages');m.scrollTop=m.scrollHeight;}
+function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}}
+function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,110)+'px';}
+marked.setOptions({breaks:true,gfm:true});
 
-function setExample(url, question) {
-  document.getElementById('url-input').value = url;
-  document.getElementById('question').value = question;
-}
-
-// ── Input helpers ─────────────────────────────────────────────────────────────
-function handleKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
-}
-function autoResize(el) {
-  el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-}
-
-// ── Marked config ─────────────────────────────────────────────────────────────
-marked.setOptions({ breaks: true, gfm: true });
+// Init history on load
+renderHistory();
 </script>
 </body>
 </html>

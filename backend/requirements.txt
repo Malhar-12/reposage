@@ -4,3 +4,4 @@ httpx
 rank-bm25
 anthropic
 python-dotenv
+slowapi
